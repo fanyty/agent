@@ -1,4 +1,36 @@
-# 智能客服 Agent 系统
+# 智能 Agent 入门项目
+
+本项目旨在为初学者提供一个基于大语言模型（LLM）的智能 Agent 的基础入门示例。
+通过两个具体的 Agent（智能客服、智能阅卷），展示了 Agent 的基本概念、构建方法和实际应用。
+
+## 什么是 Agent？ (概念入门)
+
+在这个项目的语境下，"Agent" 指的是一个能够理解用户请求、进行思考、并利用可用工具（在这里主要是调用 LLM）来完成特定任务的系统。其核心思想通常包括：
+
+1.  **LLM 作为大脑**: 使用大语言模型进行自然语言理解、推理、决策和生成响应。
+2.  **状态管理**: Agent 需要知道当前处于哪个任务阶段（例如，客服 Agent 是在处理注册、查询还是删除？），以便使用正确的逻辑和上下文。
+3.  **提示词工程 (Prompt Engineering)**:精心设计的提示词是指导 LLM 按预期工作的关键，包括定义 Agent 的角色、任务目标、可用信息和输出格式。
+4.  **工具/动作 (模拟)**: 虽然本项目没有显式地集成外部工具，但客服 Agent 中解析 LLM 输出并执行模拟数据库操作的部分，模拟了 Agent 调用工具（例如数据库查询）并根据结果进行下一步行动的过程。
+
+本项目通过 Python 代码和详细的提示词展示了如何将这些概念结合起来构建基础 Agent。
+
+## 本项目包含的 Agent 示例
+
+1.  **智能客服 Agent (`client.py`)**: 模拟一个可以处理用户注册、信息查询和账户删除请求的客服机器人。它展示了：
+    *   基于 LLM 的多轮对话管理。
+    *   使用特殊标记词进行显式状态切换。
+    *   通过解析 LLM 的结构化输出来模拟执行动作（数据库操作）。
+
+2.  **智能阅卷 Agent (`grading_agent.py`)**: 模拟一个可以根据标准答案和评分细则，自动评阅学生主观题答案的系统。它展示了：
+    *   如何利用 LLM 进行基于规则的评估任务。
+    *   强制 LLM 输出特定 JSON 格式以便程序处理。
+    *   使用 `tenacity` 库处理 API 调用的自动重试。
+
+---
+
+## 系统设置与运行
+
+**（注意：关于智能客服 Agent 的具体使用方法和对话示例，请参考 `agent/新手指南.md` 文件。）**
 
 这是一个基于大语言模型的智能客服 Agent 系统，展示了如何构建一个基础的对话式智能体。
 
@@ -8,6 +40,7 @@
 - 自动意图识别
 - 状态管理机制
 - 上下文感知对话
+- **内存模拟数据库**：使用 Python 字典存储用户数据（应用重启后数据丢失）
 
 ## 系统架构
 
@@ -16,17 +49,19 @@
 1. **SmartAssistant 类**
    - 负责管理整个对话过程
    - 处理用户输入
-   - 维护对话状态
-   - 生成响应
+   - 维护对话状态和各业务线独立的对话历史
+   - 调用 LLM 生成响应
+   - **包含用于解析 LLM 输出和执行模拟数据库操作（增、查、删）的内部方法**
 
 2. **提示词系统**
    - `sys_prompt`: 系统角色定义
    - `registered_prompt`: 注册业务处理
    - `query_prompt`: 查询业务处理
    - `delete_prompt`: 删除业务处理
+   - **提示词经过调整，指导 LLM 在任务结束前以特定格式输出收集到的信息，以便代码解析和执行后续操作。**
 
 3. **状态管理**
-   - 使用 `current_assignment` 追踪当前状态
+   - 使用 `current_assignment` 追踪当前状态 ("system", "registered", "query", "delete")
    - 通过特殊标记词实现状态转换
    - 维护各业务线独立的对话历史
 
@@ -34,17 +69,32 @@
 
 1. 安装依赖：
 ```bash
-pip install -r requirements.txt
+pip install -r agent/requirements.txt
 ```
 
 2. 配置环境变量：
-   - 创建 `.env` 文件
-   - 设置 API 密钥：`ZISHU_API_KEY=your_api_key_here`
+   - 在 `agent/` 目录下创建一个名为 `.env` 的文件。
+   - 在 `.env` 文件中设置以下变量（根据您使用的 LLM 服务商调整）：
+     ```dotenv
+     # 必须：您的 API 密钥
+     OPENAI_API_KEY="sk-your_openai_api_key_here" 
+     # 可选：API 的基础 URL (如果使用 OpenAI 兼容服务或特定服务如智谱)
+     # BASE_URL="https://open.bigmodel.cn/api/paas/v4/" 
+     # 可选：使用的模型名称 (例如 OpenAI 的 gpt-4, 智谱的 glm-4-flash)
+     # CHAT_MODEL="glm-4-flash"
+     ```
+   - **重要**: `OPENAI_API_KEY` 是必需的。`BASE_URL` 和 `CHAT_MODEL` 如果未在 `.env` 中设置，`client.py` 将使用默认的 OpenAI 设置（如果适用），而 `grading_agent.py` 将使用智谱 AI 的默认设置。
+   - **安全警告**: `.env` 文件包含敏感信息。本项目已在 `agent/.gitignore` 文件中包含 `.env`，以防止其被意外提交到 Git。**请绝对不要将您的 `.env` 文件上传到公共仓库！**
 
-3. 运行系统：
-```bash
-python client.py
-```
+3. 运行 Agent：
+   *   **智能客服 Agent**: 
+       ```bash
+       python agent/client.py
+       ```
+   *   **智能阅卷 Agent (示例)**:
+       ```bash
+       python agent/grading_agent.py
+       ```
 
 ## 使用说明
 
@@ -92,14 +142,18 @@ Assistant: 好的，张三先生。请设置您的密码，并提供您的电子
 ## 技术细节
 
 ### 依赖项
-- openai：用于与语言模型交互
-- python-dotenv：用于环境变量管理
+- `openai>=1.0.0`：用于与语言模型交互
+- `python-dotenv>=0.19.0`：用于环境变量管理
+- `tenacity>=8.0.0`：可能用于 API 调用的重试逻辑 (根据 requirements.txt)
+- `re` (Python 内置)：用于解析 LLM 的结构化输出
 
 ### 核心类方法
 
-- `__init__`: 初始化系统状态和提示词
-- `get_response`: 处理用户输入并生成响应
-- `start_conversation`: 启动对话循环
+- `__init__`: 初始化系统状态、提示词和**模拟数据库 (内存字典)**
+- `get_response`: 处理用户输入，调用 LLM，**解析 LLM 响应以执行状态转换和模拟数据库操作**，并生成最终响应
+- `start_conversation`: 启动命令行对话循环
+- `_parse_registration_info`, `_parse_query_info`, `_parse_delete_info`: 内部方法，用于从 LLM 的特定格式响应中提取用户信息。
+- `_register_user`, `_query_user`, `_delete_user`: 内部方法，用于在内存字典中执行模拟的数据库增、查、删操作。
 
 ### 状态转换机制
 
@@ -116,8 +170,8 @@ Assistant: 好的，张三先生。请设置您的密码，并提供您的电子
    - 使用环境变量管理敏感信息
 
 2. 数据处理
-   - 当前版本模拟数据库操作
-   - 实际应用需要实现真实的数据库连接
+   - **当前版本使用内存中的 Python 字典 (`self.user_database`) 模拟数据库操作，用于演示目的。应用重启后所有用户数据将丢失。**
+   - **实际生产应用需要替换为真实的数据持久化方案（如 SQL 数据库、NoSQL 数据库等）。**
 
 3. 错误处理
    - 建议添加更完善的错误处理机制
@@ -143,4 +197,19 @@ Assistant: 好的，张三先生。请设置您的密码，并提供您的电子
 
 ## 许可证
 
-MIT License 
+MIT License
+
+---
+
+## 学习建议
+
+对于希望通过本项目学习 Agent 基础知识的新人，建议按以下顺序进行：
+
+1.  **阅读 `README.md` (本文件)**: 全面了解项目目标、Agent 概念、包含的示例以及基本设置。
+2.  **查看 `agent/client.py`**: 这是核心的客服 Agent 实现。结合代码注释，理解 Agent 的主循环、状态管理、提示词应用以及模拟数据库交互。
+3.  **运行客服 Agent**: 按照【安装说明】配置好环境后，在命令行运行 `python agent/client.py`，亲自与 Agent 交互，体验注册、查询、删除流程，观察其行为和状态变化。
+4.  **查看 `agent/grading_agent.py`**: 这是第二个 Agent 示例。理解它如何使用 LLM 进行评分，并强制输出 JSON 格式。
+5.  **查看 `agent/新手指南.md`**: **（推荐）** 从最终用户的角度了解客服 Agent 的具体使用方法和示例对话。
+6.  ~~**(可选) 查看 `agent/agent.ipynb` 和 `agent/test_agent_01.py`**: 了解可能的交互式演示或测试用例（需要先检查其具体内容）。~~ (这些文件已被移除)
+
+祝您学习愉快！ 
